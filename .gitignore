@@ -1,0 +1,42 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.orig
+*.log
+*.tmp
+*.bak
+.idea/
+.vscode/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Env / credentials
+
+.env.local
+.env.*.local
+
+# Python / misc
+__pycache__/
+
+# Docker
+*.pid
+
+# Build artifacts
+build/
+
+# OS trash
+.Trash-*

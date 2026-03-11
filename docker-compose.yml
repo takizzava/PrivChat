@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: privchat_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-privchat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-privchat}
+      POSTGRES_DB: ${POSTGRES_DB:-privchat_dev}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - privchat_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: privchat_redis
+    command: ["redis-server", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    networks:
+      - privchat_net
+
+  backend:
+    build:
+      context: ./apps/backend
+    container_name: privchat_backend
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      MIX_ENV: dev
+      PHX_SERVER: "true"
+      DATABASE_URL: ${DATABASE_URL:-ecto://privchat:privchat@db/privchat_dev}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-changemechangemechangemechangemechangeme}
+      JWT_SECRET: ${JWT_SECRET:-supersecretjwt}
+      PHX_HOST: "0.0.0.0"
+    ports:
+      - "4000:4000"
+    networks:
+      - privchat_net
+
+  frontend:
+    build:
+      context: ./apps/frontend
+    container_name: privchat_frontend
+    depends_on:
+      - backend
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:4000/socket}
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    networks:
+      - privchat_net
+
+volumes:
+  db_data:
+
+networks:
+  privchat_net:
+    driver: bridge

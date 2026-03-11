@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pc-primary: #5c7cfa;
+  --pc-primary-strong: #4263eb;
+  --pc-accent: #5eead4;
+  --pc-bg: #0c0f14;
+  --pc-surface: #11151d;
+  --pc-surface-strong: #161c26;
+  --pc-surface-subtle: #0f131b;
+  --pc-border: rgba(255, 255, 255, 0.08);
+  --pc-border-strong: rgba(255, 255, 255, 0.12);
+  --pc-text: #e7ecf4;
+  --pc-text-muted: #9aa5b8;
+  --pc-success: #46d68c;
+  --pc-warning: #f2c24f;
+  --pc-danger: #ef6b74;
+  --pc-info: #5aa0ff;
+  --pc-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  --pc-radius-lg: 18px;
+  --pc-radius-md: 12px;
+  --pc-radius-sm: 10px;
+  --pc-font-size: 1rem;
+  --pc-transition: 120ms ease;
+}
+
+:root[data-theme="light"] {
+  --pc-bg: #f5f7fb;
+  --pc-surface: #ffffff;
+  --pc-surface-strong: #f0f2f7;
+  --pc-surface-subtle: #e7eaf2;
+  --pc-border: rgba(15, 23, 42, 0.08);
+  --pc-border-strong: rgba(15, 23, 42, 0.14);
+  --pc-text: #0f172a;
+  --pc-text-muted: #48556b;
+  --pc-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
+}
+
+@layer base {
+  * {
+    @apply antialiased;
+  }
+
+  body {
+    background: var(--pc-bg);
+    color: var(--pc-text);
+    font-size: var(--pc-font-size);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--pc-primary) 18%, transparent);
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--pc-primary) 40%, #3a4153);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
