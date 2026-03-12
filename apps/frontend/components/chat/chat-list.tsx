@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Chat } from "@types/chat";
+import type { Chat } from "@t/chat";
 import { Avatar } from "@components/ui/avatar";
 import { Badge } from "@components/ui/badge";
 import { IconButton } from "@components/ui/icon-button";
-import { Pin, Clock3, MessageSquare, Pencil } from "lucide-react";
-import { Message } from "@types/message";
+import { Pin, Clock3, MessageSquare } from "lucide-react";
+import type { Message } from "@t/message";
 import { cn } from "@lib/utils";
 
 interface Props {
@@ -37,11 +37,21 @@ function ChatPreview({
   active: boolean;
   onPinToggle: () => void;
 }) {
+  const hasBody =
+    lastMessage && typeof lastMessage.body === "string" && lastMessage.body.trim().length > 0;
+
+  const attachments =
+    (lastMessage?.envelope_metadata as any)?.attachments as
+      | Array<{ name: string; type?: string; size: number }>
+      | undefined;
+
   const subtitle = draft
     ? `Черновик: ${draft.slice(0, 40)}`
-    : lastMessage
-    ? lastMessage.body.slice(0, 80)
-    : "Пока нет сообщений — начните диалог";
+    : hasBody
+    ? lastMessage!.body.slice(0, 80)
+    : attachments && attachments.length > 0
+    ? "Вложение"
+    : "Пока нет сообщений — напишите первым";
 
   return (
     <Link
@@ -69,13 +79,13 @@ function ChatPreview({
           )}
         </div>
         <div className="mt-1 text-sm text-[var(--pc-text-muted)] flex items-center gap-2">
-          {lastMessage ? <MessageSquare className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          <MessageSquare className="h-4 w-4" />
           <span className="truncate">{subtitle}</span>
         </div>
         <div className="mt-1 text-[11px] text-[var(--pc-text-muted)] flex items-center gap-2">
           <Clock3 className="h-3.5 w-3.5" />
           <span>
-            {new Date(chat.inserted_at).toLocaleDateString(undefined, {
+            {new Date(chat.updated_at || chat.inserted_at).toLocaleDateString(undefined, {
               day: "2-digit",
               month: "2-digit"
             })}
@@ -111,7 +121,7 @@ export default function ChatList({
   messages,
   activeId,
   onPinToggle,
-  emptyLabel = "Нет чатов — создайте первый"
+  emptyLabel = "У вас пока нет чатов. Найдите контакт и начните диалог."
 }: Props) {
   if (!chats.length) {
     return (
@@ -151,7 +161,7 @@ export default function ChatList({
   return (
     <div className="space-y-4">
       {pinned.length ? renderList(pinned, "Закреплённые") : null}
-      {renderList(regular, pinned.length ? "Все чаты" : undefined)}
+      {renderList(regular, pinned.length ? "Чаты" : undefined)}
     </div>
   );
 }

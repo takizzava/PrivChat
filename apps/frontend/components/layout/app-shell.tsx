@@ -1,15 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@store/auth-store";
-import {
-  LogOut,
-  MessageSquare,
-  Settings2,
-  ShieldCheck,
-  Sparkles
-} from "lucide-react";
+import { LogOut, MessageSquare, Settings2, ShieldCheck, User } from "lucide-react";
 import { Avatar } from "@components/ui/avatar";
 import { Badge } from "@components/ui/badge";
 import { IconButton } from "@components/ui/icon-button";
@@ -21,15 +15,17 @@ interface Props {
 }
 
 const navItems = [
-  { href: "/chats", label: "Диалоги", icon: MessageSquare },
-  { href: "/settings", label: "Настройки", icon: Settings2 }
+  { href: "/chats", label: "Чаты", icon: MessageSquare, description: "Диалоги и группы" },
+  { href: "/settings", label: "Настройки", icon: Settings2, description: "Профиль и тема" }
 ];
 
 export default function AppShell({ children }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [online, setOnline] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -41,6 +37,11 @@ export default function AppShell({ children }: Props) {
       window.removeEventListener("offline", handle);
     };
   }, []);
+
+  const handleLogout = () => {
+    logout();
+    router.replace("/login");
+  };
 
   return (
     <div className="min-h-screen flex bg-[var(--pc-bg)] text-[var(--pc-text)]">
@@ -56,14 +57,14 @@ export default function AppShell({ children }: Props) {
             </div>
             <div className="flex items-center gap-1 text-xs text-[var(--pc-text-muted)] mt-1">
               <ShieldCheck className="h-4 w-4" />
-              <span>Сквозное шифрование</span>
+              <span>Безопасный обмен сообщениями</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <NotificationCenter />
             <IconButton
               aria-label="Выйти"
-              onClick={logout}
+              onClick={handleLogout}
               subtle
               className="hover:text-rose-200"
             >
@@ -89,9 +90,7 @@ export default function AppShell({ children }: Props) {
                 <div className="flex flex-col leading-tight">
                   <span className="font-semibold">{item.label}</span>
                   <span className="text-xs text-[var(--pc-text-muted)] group-hover:text-[var(--pc-text)]">
-                    {item.href === "/chats"
-                      ? "Ленты, закрепленные, архив"
-                      : "Тема, сессии, уведомления"}
+                    {item.description}
                   </span>
                 </div>
               </Link>
@@ -100,13 +99,13 @@ export default function AppShell({ children }: Props) {
         </nav>
         <div className="border-t border-[var(--pc-border)] px-4 py-4">
           <div className="flex items-center gap-3">
-            <Avatar name={user?.display_name || user?.email || "Пользователь"} />
+            <Avatar name={user?.display_name || user?.username || user?.email || "Профиль"} />
             <div className="flex-1 min-w-0">
               <div className="font-semibold truncate">
-                {user?.display_name || user?.email || "Без имени"}
+                {user?.display_name || user?.username || "Неизвестный пользователь"}
               </div>
               <div className="text-xs text-[var(--pc-text-muted)] truncate">
-                {user?.email ?? "email не указан"}
+                {user?.phone || user?.email}
               </div>
             </div>
             <Badge tone={online ? "success" : "danger"} variant="soft">
@@ -114,10 +113,7 @@ export default function AppShell({ children }: Props) {
             </Badge>
           </div>
           <div className="mt-3 text-xs text-[var(--pc-text-muted)]">
-            <div className="flex items-center gap-1">
-              <Sparkles className="h-4 w-4" />
-              <span>Командная палитра: Ctrl/Cmd + K</span>
-            </div>
+            Быстрый переход к профилю и теме — раздел «Настройки».
           </div>
         </div>
       </aside>
@@ -137,28 +133,45 @@ export default function AppShell({ children }: Props) {
           </div>
           <div className="flex items-center gap-2">
             <NotificationCenter />
-            <IconButton subtle aria-label="Настройки" onClick={() => location.assign("/settings")}>
-              <Settings2 className="h-5 w-5" />
-            </IconButton>
-            <IconButton
-              subtle
-              aria-label="Выйти"
-              className="text-rose-200"
-              onClick={logout}
-            >
-              <LogOut className="h-5 w-5" />
+            <IconButton subtle aria-label="Профиль" onClick={() => setProfileOpen((v) => !v)}>
+              <User className="h-5 w-5" />
             </IconButton>
           </div>
         </div>
+        {profileOpen && (
+          <div className="mx-4 mb-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface)] shadow-lg p-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <Avatar name={user?.display_name || user?.username || "Профиль"} />
+              <div>
+                <div className="font-semibold">{user?.display_name || user?.username}</div>
+                <div className="text-xs text-[var(--pc-text-muted)]">{user?.phone || user?.email}</div>
+              </div>
+            </div>
+            <button
+              className="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-[var(--pc-surface-strong)]"
+              onClick={() => {
+                setProfileOpen(false);
+                router.push("/settings");
+              }}
+            >
+              Настройки и профиль
+            </button>
+            <button
+              className="w-full text-left text-sm px-3 py-2 rounded-lg text-rose-200 hover:bg-[var(--pc-surface-strong)]"
+              onClick={handleLogout}
+            >
+              Выйти
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col lg:ml-0">
-        <main className="flex-1 flex overflow-hidden lg:pl-0 pt-[64px] lg:pt-0">
+        <main className="flex-1 flex overflow-hidden lg:pl-0 pt-[64px] lg:pt-0 pb-[64px] lg:pb-0">
           {children}
         </main>
       </div>
 
-      {/* Мобильное нижнее меню */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--pc-border)] bg-[var(--pc-surface)]/90 backdrop-blur">
         <div className="flex items-center justify-around py-2 px-2">
           {navItems.map((item) => {
@@ -178,7 +191,7 @@ export default function AppShell({ children }: Props) {
             );
           })}
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="flex flex-col items-center gap-1 text-xs text-rose-200"
             aria-label="Выйти"
           >

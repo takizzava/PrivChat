@@ -15,7 +15,7 @@ const font = Manrope({
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru" data-theme="dark">
+    <html lang="ru" data-theme="light">
       <body className={font.className}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>

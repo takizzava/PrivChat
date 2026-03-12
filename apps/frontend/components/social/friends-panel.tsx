@@ -6,115 +6,129 @@ import { Input } from "@components/ui/input";
 import { Button } from "@components/ui/button";
 import { Badge } from "@components/ui/badge";
 import { IconButton } from "@components/ui/icon-button";
-import { Check, Phone, UserPlus, X } from "lucide-react";
+import { MessageSquare, Phone, Search, UserPlus } from "lucide-react";
 
-export function FriendsPanel() {
-  const { friends, searchResults, searchByPhone, sendRequest, acceptRequest, block, remove } =
-    useFriendsStore();
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
+type Props = {
+  onStartChat?: (userId: number) => void;
+};
 
-  const handleSearch = () => {
-    if (!phone.trim()) return;
-    searchByPhone(phone.trim());
+export function FriendsPanel({ onStartChat }: Props) {
+  const { contacts, searchResults, searchUsers, addContact, clearSearch } = useFriendsStore();
+  const [query, setQuery] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const handleSearch = async () => {
+    await searchUsers(query);
   };
 
-  const handleSend = (p: string, n?: string) => {
-    sendRequest(n || "Контакт", p);
-    setPhone("");
-    setName("");
+  const handleAdd = async (id: number) => {
+    setBusyId(id);
+    try {
+      await addContact(id);
+      setQuery("");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-strong)]/60 p-4 space-y-3">
-        <div className="text-sm font-semibold">Поиск по номеру телефона</div>
-        <div className="flex flex-col gap-2">
+        <div className="text-sm font-semibold flex items-center gap-2">
+          <Search className="h-4 w-4" />
+          <span>Поиск по номеру или нику</span>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
           <Input
             prefix={<Phone className="h-4 w-4" />}
-            placeholder="+7 999 123-45-67"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+7 999 123-45-67 или username"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
-          <Input
-            placeholder="Имя контакта"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleSearch} className="flex-1">
-              Найти
-            </Button>
-            <Button onClick={() => handleSend(phone, name)} disabled={!phone.trim()} className="flex-1">
-              Добавить
-            </Button>
-          </div>
+          <Button variant="secondary" onClick={handleSearch}>
+            Найти
+          </Button>
         </div>
         {searchResults.length > 0 && (
-          <div className="rounded-lg border border-[var(--pc-border)] bg-white/5 p-3 space-y-2">
-            <div className="text-xs text-[var(--pc-text-muted)]">Результаты</div>
-            {searchResults.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="font-semibold">{r.name}</div>
-                  <div className="text-xs text-[var(--pc-text-muted)]">{r.phone}</div>
+          <div className="rounded-lg border border-[var(--pc-border)] bg-[var(--pc-surface)]/60 p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs text-[var(--pc-text-muted)]">
+              <span>Результаты</span>
+              <button className="underline" onClick={clearSearch}>
+                очистить
+              </button>
+            </div>
+            {searchResults.map((r) => {
+              const exists = contacts.find((c) => c.contact_id === r.id);
+              return (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-[var(--pc-border)] bg-[var(--pc-surface-strong)]/60 px-3 py-2"
+                >
+                  <div>
+                    <div className="font-semibold">{r.display_name || r.username}</div>
+                    <div className="text-xs text-[var(--pc-text-muted)]">
+                      {r.username} · {r.phone}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {exists ? (
+                      <Badge tone="success" variant="soft">
+                        Уже в контактах
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => handleAdd(r.id)}
+                        disabled={busyId === r.id}
+                        className="flex items-center gap-1"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Добавить
+                      </Button>
+                    )}
+                    <IconButton
+                      subtle
+                      aria-label="Начать чат"
+                      onClick={() => onStartChat?.(r.id)}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </IconButton>
+                  </div>
                 </div>
-                <Button size="sm" onClick={() => handleSend(r.phone, r.name)}>
-                  Отправить заявку
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold">Мои контакты</div>
-          <Badge tone="info">{friends.length}</Badge>
+          <div className="text-sm font-semibold">Контакты</div>
+          <Badge tone="info">{contacts.length}</Badge>
         </div>
         <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
-          {friends.map((f) => (
+          {contacts.length === 0 && (
+            <div className="text-sm text-[var(--pc-text-muted)] border border-dashed border-[var(--pc-border)] rounded-xl p-3 text-center">
+              Контактов пока нет. Добавьте кого-то по телефону или нику.
+            </div>
+          )}
+          {contacts.map((f) => (
             <div
               key={f.id}
               className="flex items-center justify-between rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-strong)]/60 px-3 py-2"
             >
               <div>
-                <div className="font-semibold">{f.name}</div>
-                <div className="text-xs text-[var(--pc-text-muted)]">{f.phone}</div>
+                <div className="font-semibold">{f.user.display_name || f.user.username}</div>
+                <div className="text-xs text-[var(--pc-text-muted)]">
+                  {f.user.username} · {f.user.phone}
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge
-                  tone={
-                    f.status === "friend"
-                      ? "success"
-                      : f.status === "pending"
-                      ? "warning"
-                      : f.status === "blocked"
-                      ? "danger"
-                      : "info"
-                  }
-                >
-                  {f.status === "friend"
-                    ? "В друзьях"
-                    : f.status === "pending"
-                    ? "Ожидает"
-                    : f.status === "blocked"
-                    ? "Блок"
-                    : "Заявка"}
+                <Badge tone={f.status === "accepted" ? "success" : "info"} variant="soft">
+                  {f.status === "accepted" ? "В контактах" : f.status}
                 </Badge>
-                {f.status === "request" && (
-                  <IconButton subtle aria-label="Принять" onClick={() => acceptRequest(f.id)}>
-                    <Check className="h-4 w-4" />
-                  </IconButton>
-                )}
-                {f.status !== "blocked" && (
-                  <IconButton subtle aria-label="Блокировать" onClick={() => block(f.id)}>
-                    <UserPlus className="h-4 w-4" />
-                  </IconButton>
-                )}
-                <IconButton subtle aria-label="Удалить" onClick={() => remove(f.id)}>
-                  <X className="h-4 w-4" />
+                <IconButton subtle aria-label="Написать" onClick={() => onStartChat?.(f.contact_id)}>
+                  <MessageSquare className="h-4 w-4" />
                 </IconButton>
               </div>
             </div>

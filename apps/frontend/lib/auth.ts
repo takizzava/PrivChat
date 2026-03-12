@@ -1,5 +1,5 @@
 import api from "./api";
-import { User } from "@types/user";
+import type { User } from "@t/user";
 
 const TOKEN_KEY = "privchat_token";
 const USER_KEY = "privchat_user";
@@ -34,20 +34,17 @@ export function setStoredUser(user: User | null) {
 }
 
 export async function apiLogin(email: string, password: string) {
-  const res = await api.post("/auth/login", { email, password });
+  const res = await api.post("/auth/login", { identifier: email, password });
   return res.data as { token: string; user: User };
 }
 
-export async function apiRegister(
-  email: string,
-  password: string,
-  display_name: string
-) {
-  const res = await api.post("/auth/register", {
-    email,
-    password,
-    display_name
-  });
+export async function apiRegister(payload: {
+  phone: string;
+  username: string;
+  password: string;
+  display_name?: string;
+  email?: string;
+}) {
+  const res = await api.post("/auth/register", payload);
   return res.data as { token: string; user: User };
 }
-

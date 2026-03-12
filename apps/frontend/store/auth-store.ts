@@ -8,7 +8,7 @@ import {
   setToken,
   getStoredUser
 } from "@lib/auth";
-import { User } from "@types/user";
+import type { User } from "@t/user";
 
 type State = {
   user: User | null;
@@ -16,12 +16,14 @@ type State = {
 };
 
 type Actions = {
-  login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    password: string,
-    displayName: string
-  ) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
+  register: (payload: {
+    phone: string;
+    username: string;
+    password: string;
+    email?: string;
+    display_name?: string;
+  }) => Promise<void>;
   logout: () => void;
 };
 
@@ -35,14 +37,14 @@ const initialToken =
 export const useAuthStore = create<State & Actions>((set) => ({
   user: initialUser,
   token: initialToken,
-  async login(email, password) {
-    const { token, user } = await apiLogin(email, password);
+  async login(identifier, password) {
+    const { token, user } = await apiLogin(identifier, password);
     setToken(token);
     setStoredUser(user);
     set({ token, user });
   },
-  async register(email, password, displayName) {
-    const { token, user } = await apiRegister(email, password, displayName);
+  async register(payload) {
+    const { token, user } = await apiRegister(payload);
     setToken(token);
     setStoredUser(user);
     set({ token, user });
@@ -53,4 +55,3 @@ export const useAuthStore = create<State & Actions>((set) => ({
     set({ token: null, user: null });
   }
 }));
-

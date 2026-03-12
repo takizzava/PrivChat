@@ -2,8 +2,8 @@
 
 import { create } from "zustand";
 import api from "@lib/api";
-import { Chat } from "@types/chat";
-import { Message } from "@types/message";
+import type { Chat } from "@t/chat";
+import type { Message } from "@t/message";
 import { persist, restore } from "@lib/storage";
 import { useAuthStore } from "./auth-store";
 import { useNotificationStore } from "./notification-store";
@@ -21,7 +21,7 @@ type ChatState = {
 type ChatActions = {
   loadChats: () => Promise<void>;
   loadMessages: (chatId: number) => Promise<void>;
-  createChat: (name: string) => Promise<Chat>;
+  startDirectChat: (partnerId: number, name?: string) => Promise<Chat>;
   createGroupChat: (name: string, memberIds: number[]) => Promise<Chat>;
   sendMessage: (
     chatId: number,
@@ -67,22 +67,46 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     set((s) => {
       const meta: Record<number, { kind?: "direct" | "group"; member_ids?: number[] }> = {};
       chats.forEach((c) => {
-        meta[c.id] = { kind: c.kind, member_ids: c.member_ids };
+        meta[c.id] = { kind: c.kind, member_ids: c.member_ids || c.members?.map((m) => m.id) };
       });
       const next = { ...s, chats, chatMeta: { ...s.chatMeta, ...meta } };
       persist(STORAGE_KEY, next);
       return next;
     });
   },
-  async createChat(name: string) {
-    const res = await api.post("/chats", { name });
+  async loadMessages(chatId: number) {
+    const res = await api.get(`/chats/${chatId}/messages`);
+    const incoming = res.data.messages as Message[];
+    const byId = new Map<string | number, Message>();
+    incoming.forEach((m) => {
+      const key = m.id ?? m.localId;
+      if (key != null) byId.set(key, { ...m, status: "sent" as const });
+    });
+    set((s) => {
+      const next = {
+        ...s,
+        messages: {
+          ...s.messages,
+          [chatId]: Array.from(byId.values())
+        },
+        unread: { ...s.unread, [chatId]: 0 }
+      };
+      persist(STORAGE_KEY, next);
+      return next;
+    });
+  },
+  async startDirectChat(partnerId: number, name?: string) {
+    const res = await api.post("/chats", { partner_id: partnerId, name });
     const chat = res.data.chat as Chat;
     set((s) => {
       const next = {
         ...s,
         chats: [chat, ...s.chats],
         unread: { ...s.unread, [chat.id]: 0 },
-        chatMeta: { ...s.chatMeta, [chat.id]: { kind: "direct" } }
+        chatMeta: {
+          ...s.chatMeta,
+          [chat.id]: { kind: (chat.kind || "direct") as "direct", member_ids: chat.member_ids }
+        }
       };
       persist(STORAGE_KEY, next);
       return next;
@@ -97,33 +121,12 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
         ...s,
         chats: [chat, ...s.chats],
         unread: { ...s.unread, [chat.id]: 0 },
-        chatMeta: { ...s.chatMeta, [chat.id]: { kind: "group", member_ids: memberIds } }
+        chatMeta: { ...s.chatMeta, [chat.id]: { kind: "group" as const, member_ids: memberIds } }
       };
       persist(STORAGE_KEY, next);
       return next;
     });
     return chat;
-  },
-  async loadMessages(chatId: number) {
-    const res = await api.get(`/chats/${chatId}/messages`);
-    const incoming = res.data.messages as Message[];
-    const byId = new Map<string | number, Message>();
-    incoming.forEach((m) => {
-      const key = m.id ?? m.localId;
-      if (key != null) byId.set(key, { ...m, status: "sent" });
-    });
-    set((s) => {
-      const next = {
-        ...s,
-        messages: {
-          ...s.messages,
-          [chatId]: Array.from(byId.values())
-        },
-        unread: { ...s.unread, [chatId]: 0 }
-      };
-      persist(STORAGE_KEY, next);
-      return next;
-    });
   },
   async sendMessage(chatId: number, body: string, envelope: Record<string, unknown> = {}) {
     const optimistic: Message = {
@@ -162,12 +165,21 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       const msg = res.data.message as Message;
       set((s) => {
         const existing = s.messages[chatId] || [];
-        const withReal = existing.map((m) => {
-          if (m.localId === optimistic.localId || (msg.id && m.id === msg.id)) {
-            return { ...msg, status: "sent" };
-          }
-          return m;
+        // Дедуп: если сообщение уже пришло по сокету раньше ответа HTTP,
+        // то удаляем/заменяем оптимистичное и не оставляем два одинаковых id.
+        const map = new Map<string | number, Message>();
+        existing.forEach((m) => {
+          const key = m.id ?? m.localId;
+          if (key == null) return;
+          // пропускаем оптимистичное (заменим реальным)
+          if (m.localId && m.localId === optimistic.localId) return;
+          // пропускаем старую копию с тем же id (заменим реальным)
+          if (msg.id != null && m.id === msg.id) return;
+          map.set(key, m);
         });
+        const realKey = (msg.id ?? optimistic.localId) as any;
+        map.set(realKey, { ...msg, status: "sent" as const });
+        const withReal = Array.from(map.values());
         const next = {
           ...s,
           messages: { ...s.messages, [chatId]: withReal }
@@ -179,7 +191,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       set((s) => {
         const existing = s.messages[chatId] || [];
         const filtered = existing.map((m) =>
-          m.localId === optimistic.localId ? { ...m, status: "failed" } : m
+          m.localId === optimistic.localId ? { ...m, status: "failed" as const } : m
         );
         const next = {
           ...s,
@@ -203,9 +215,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       const isPinned = s.pinned.includes(chatId);
       const next = {
         ...s,
-        pinned: isPinned
-          ? s.pinned.filter((id) => id !== chatId)
-          : [chatId, ...s.pinned]
+        pinned: isPinned ? s.pinned.filter((id) => id !== chatId) : [chatId, ...s.pinned]
       };
       persist(STORAGE_KEY, next);
       return next;
@@ -219,6 +229,9 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     });
   },
   appendMessage(chatId: number, message: Message) {
+    const currentUserId = useAuthStore.getState().user?.id;
+    const isForeign = message.sender_id !== currentUserId;
+
     set((s) => {
       const existing = s.messages[chatId] || [];
       const key = message.id ?? message.localId ?? crypto.randomUUID();
@@ -232,24 +245,25 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
           ...s.messages,
           [chatId]: Array.from(map.values())
         },
-        unread: {
-          ...s.unread,
-          [chatId]: (s.unread[chatId] ?? 0) + 1
-        }
+        unread: isForeign
+          ? {
+              ...s.unread,
+              [chatId]: (s.unread[chatId] ?? 0) + 1
+            }
+          : s.unread
       };
       persist(STORAGE_KEY, next);
       return next;
     });
-    const currentUserId = useAuthStore.getState().user?.id;
-    if (message.sender_id !== currentUserId) {
+    if (isForeign) {
       useNotificationStore
         .getState()
         .push({
-          title: `Новое сообщение в чате #${chatId}`,
+          title: `Новое сообщение в чате`,
           body: message.body,
           chatId,
           type: "message"
         });
     }
   }
-})); 
+}));

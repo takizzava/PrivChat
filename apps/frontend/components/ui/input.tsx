@@ -1,9 +1,11 @@
 "use client";
 
-import { InputHTMLAttributes, forwardRef, ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
+import { forwardRef } from "react";
 import { cn } from "@lib/utils";
 
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, "prefix"> {
   prefix?: ReactNode;
   label?: string;
   hint?: string;

@@ -39,16 +39,16 @@ export default function SettingsPage() {
         <div className="max-w-5xl mx-auto px-6 py-10 space-y-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm text-[var(--pc-text-muted)]">Ваш профиль</p>
+              <p className="text-sm text-[var(--pc-text-muted)]">Ваш профиль и внешний вид</p>
               <h1 className="text-3xl font-semibold">Настройки</h1>
               <div className="flex items-center gap-2 text-xs text-[var(--pc-text-muted)] mt-1">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Сессия защищена</span>
+                <span>Ваши данные защищены</span>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Badge tone="info" variant="soft">
-                {user?.email}
+                {user?.phone || user?.email}
               </Badge>
               <IconButton subtle aria-label="Выйти" onClick={logout}>
                 <LogOut className="h-5 w-5" />
@@ -63,7 +63,7 @@ export default function SettingsPage() {
                 <div>
                   <p className="font-semibold">Уведомления</p>
                   <p className="text-xs text-[var(--pc-text-muted)]">
-                    Включите системные уведомления в браузере.
+                    Включите уведомления в браузере, чтобы не пропускать сообщения.
                   </p>
                 </div>
               </div>
@@ -72,9 +72,9 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5 text-[var(--pc-primary)]" />
                 <div>
-                  <p className="font-semibold">Сессии</p>
+                  <p className="font-semibold">Мобильный режим</p>
                   <p className="text-xs text-[var(--pc-text-muted)]">
-                    Следите за активностью аккаунта на разных устройствах.
+                    Приложение оптимизировано под телефоны — используйте снизу навигацию.
                   </p>
                 </div>
               </div>
@@ -85,7 +85,7 @@ export default function SettingsPage() {
                 <div>
                   <p className="font-semibold">Безопасность</p>
                   <p className="text-xs text-[var(--pc-text-muted)]">
-                    Используйте сложный пароль и не передавайте токен.
+                    Мы используем токены и валидацию на сервере. Не делитесь паролем.
                   </p>
                 </div>
               </div>
@@ -96,10 +96,10 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-[var(--pc-text-muted)]">Профиль</p>
-                <h2 className="text-xl font-semibold">Редактирование данных</h2>
+                <h2 className="text-xl font-semibold">Контакты и описание</h2>
               </div>
               <Badge tone="info" variant="soft">
-                Локально и на клиенте
+                Сохраняется локально
               </Badge>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -120,7 +120,7 @@ export default function SettingsPage() {
               onChange={(e) => updateProfile({ about: e.target.value })}
             />
             <div className="flex items-center justify-end">
-              <Button onClick={() => updateProfile({})}>Сохранено локально</Button>
+              <Button onClick={() => updateProfile({})}>Сохранить</Button>
             </div>
           </div>
 

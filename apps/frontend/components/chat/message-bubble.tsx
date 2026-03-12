@@ -1,6 +1,6 @@
 "use client";
 
-import { Message } from "@types/message";
+import type { Message } from "@t/message";
 import { useThemeStore } from "@store/theme-store";
 import { useAuthStore } from "@store/auth-store";
 import {
@@ -109,12 +109,12 @@ export default function MessageBubble({ message, onReply }: Props) {
                 return (
                   <div
                     key={`${a.name}-${idx}`}
-                    className="flex items-center gap-2 rounded-lg bg-white/10 px-2 py-1 text-xs"
+                    className="flex items-center gap-2 rounded-lg bg-white/10 px-2 py-1 text-xs min-w-0"
                   >
                     {isAudio ? <Mic className="h-4 w-4" /> : <Paperclip className="h-4 w-4" />}
-                    <span className="truncate">{a.name}</span>
+                    <span className="truncate max-w-[160px] sm:max-w-[220px]">{a.name}</span>
                     <span className="text-[10px] opacity-70">
-                      {(a.size / 1024).toFixed(1)} КБ
+                      {(a.size / 1024).toFixed(1)} kB
                     </span>
                     {isAudio && a.url ? (
                       <audio controls className="ml-auto max-w-[160px]">

@@ -3,14 +3,15 @@ import { useChatStore } from "@store/chat-store";
 
 describe("chat-store", () => {
   beforeEach(() => {
+    // Сбрасываем данные, не перезаписывая actions zustand
     useChatStore.setState({
       chats: [],
       messages: {},
       pending: {},
-      loadChats: async () => {},
-      loadMessages: async () => {},
-      sendMessage: async () => {},
-      appendMessage: () => {}
+      pinned: [],
+      drafts: {},
+      unread: {},
+      chatMeta: {}
     } as any);
   });
 

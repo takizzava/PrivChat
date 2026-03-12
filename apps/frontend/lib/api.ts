@@ -16,3 +16,15 @@ api.interceptors.request.use((config) => {
 
 export default api;
 
+export async function uploadFile(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await api.post("/uploads", form, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+  return res.data as {
+    ok: boolean;
+    file: { name: string; type?: string; size: number; url: string };
+  };
+}
+

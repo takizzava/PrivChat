@@ -2,12 +2,12 @@
 
 import { useMemo } from "react";
 import ChatList from "./chat-list";
-import { Chat } from "@types/chat";
-import { Message } from "@types/message";
+import type { Chat } from "@t/chat";
+import type { Message } from "@t/message";
 import { Input } from "@components/ui/input";
 import { Button } from "@components/ui/button";
 import { SegmentedControl } from "@components/ui/segmented";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Users } from "lucide-react";
 import { FriendsPanel } from "@components/social/friends-panel";
 
 type Filter = "all" | "unread" | "pinned";
@@ -25,8 +25,10 @@ interface Props {
   onFilterChange: (value: string) => void;
   onFilterModeChange: (mode: Filter) => void;
   onViewModeChange?: (mode: "chats" | "friends") => void;
-  onCreateChat: () => void;
+  onCreateChat?: () => void;
+  onCreateGroupChat?: () => void;
   onPinToggle: (chatId: number) => void;
+  onStartChatWithUser?: (userId: number) => void;
 }
 
 export function ChatSidebar({
@@ -43,7 +45,9 @@ export function ChatSidebar({
   onFilterModeChange,
   onViewModeChange,
   onCreateChat,
-  onPinToggle
+  onCreateGroupChat,
+  onPinToggle,
+  onStartChatWithUser
 }: Props) {
   const filtered = useMemo(() => {
     const bySearch = chats.filter((c) =>
@@ -64,18 +68,24 @@ export function ChatSidebar({
               {viewMode === "friends" ? "Контакты" : "Чаты"}
             </p>
             <h2 className="text-xl font-semibold">
-              {viewMode === "friends" ? "Друзья и поиск" : "Входящие"}
+              {viewMode === "friends" ? "Люди" : "Диалоги"}
             </h2>
           </div>
-          <Button size="sm" onClick={onCreateChat} className="shrink-0">
-            <Plus className="h-4 w-4" />
-            Новый чат
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" variant="secondary" onClick={onCreateGroupChat}>
+              <Users className="h-4 w-4" />
+              Группа
+            </Button>
+            <Button size="sm" onClick={onCreateChat}>
+              <Plus className="h-4 w-4" />
+              Диалог
+            </Button>
+          </div>
         </div>
         <SegmentedControl
           options={[
             { label: "Чаты", value: "chats" },
-            { label: "Друзья", value: "friends" }
+            { label: "Контакты", value: "friends" }
           ]}
           value={viewMode}
           onChange={(val) => onViewModeChange?.(val as "chats" | "friends")}
@@ -85,14 +95,14 @@ export function ChatSidebar({
             <Input
               value={filter}
               onChange={(e) => onFilterChange(e.target.value)}
-              placeholder="Поиск по людям и группам"
+              placeholder="Поиск по названию"
               prefix={<Search className="h-4 w-4" />}
             />
             <SegmentedControl
               options={[
                 { label: "Все", value: "all" },
                 { label: "Непрочитанные", value: "unread" },
-                { label: "Закреплённые", value: "pinned" }
+                { label: "Закрепленные", value: "pinned" }
               ]}
               value={filterMode}
               onChange={(val) => onFilterModeChange(val as Filter)}
@@ -102,7 +112,7 @@ export function ChatSidebar({
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {viewMode === "friends" ? (
-          <FriendsPanel />
+          <FriendsPanel onStartChat={onStartChatWithUser} />
         ) : (
           <ChatList
             chats={filtered}

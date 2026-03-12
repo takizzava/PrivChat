@@ -1,109 +1,99 @@
 "use client";
 
 import { create } from "zustand";
+import api from "@lib/api";
 import { persist, restore } from "@lib/storage";
 
-export type FriendStatus = "friend" | "pending" | "request" | "blocked";
+export type ContactStatus = "accepted" | "pending" | "blocked" | "none";
 
-export type Friend = {
+export type Contact = {
   id: number;
-  name: string;
-  phone: string;
-  status: FriendStatus;
-  added_at: string;
+  user_id: number;
+  contact_id: number;
+  status: ContactStatus;
+  inserted_at: string;
+  user: {
+    id: number;
+    display_name?: string | null;
+    username?: string | null;
+    phone?: string | null;
+  };
 };
 
 type State = {
-  friends: Friend[];
-  searchResults: Friend[];
-  lastId: number;
+  contacts: Contact[];
+  searchResults: Array<{
+    id: number;
+    display_name?: string | null;
+    username: string;
+    phone: string;
+    status?: ContactStatus;
+  }>;
+  loading: boolean;
 };
 
 type Actions = {
-  searchByPhone: (phone: string) => void;
-  sendRequest: (name: string, phone: string) => void;
-  acceptRequest: (id: number) => void;
-  block: (id: number) => void;
-  remove: (id: number) => void;
+  loadContacts: () => Promise<void>;
+  searchUsers: (query: string) => Promise<void>;
+  addContact: (userId: number) => Promise<void>;
+  clearSearch: () => void;
 };
 
-const STORAGE_KEY = "privchat_friends";
-
-const defaultState: State = {
-  friends: [
-    { id: 1, name: "Алексей Смирнов", phone: "+79991112233", status: "friend", added_at: new Date().toISOString() },
-    { id: 2, name: "Мария Иванова", phone: "+79995556677", status: "friend", added_at: new Date().toISOString() },
-    { id: 3, name: "Команда дизайна", phone: "+70000000000", status: "friend", added_at: new Date().toISOString() }
-  ],
-  searchResults: [],
-  lastId: 4
-};
-
+const STORAGE_KEY = "privchat_contacts";
+const defaultState: State = { contacts: [], searchResults: [], loading: false };
 const restored = restore<State>(STORAGE_KEY, defaultState);
 
 export const useFriendsStore = create<State & Actions>((set, get) => ({
   ...defaultState,
   ...restored,
-  searchByPhone(phone) {
-    const normalized = phone.replace(/\s|-/g, "");
-    const exists = get().friends.find((f) => f.phone === normalized);
-    const mock: Friend = exists || {
-      id: get().lastId + 1,
-      name: "Новый контакт",
-      phone: normalized,
-      status: "request",
-      added_at: new Date().toISOString()
-    };
+  async loadContacts() {
+    set({ loading: true });
+    try {
+      const res = await api.get("/contacts");
+      const contacts = res.data.contacts as Contact[];
+      set((s) => {
+        const next = { ...s, contacts, loading: false };
+        persist(STORAGE_KEY, next);
+        return next;
+      });
+    } catch (e) {
+      set((s) => ({ ...s, loading: false }));
+      throw e;
+    }
+  },
+  async searchUsers(query: string) {
+    const q = query.trim();
+    if (!q) {
+      set((s) => ({ ...s, searchResults: [] }));
+      return;
+    }
+    try {
+      const res = await api.get("/users/search", { params: { q } });
+      const results = res.data.results as State["searchResults"];
+      set((s) => {
+        const next = { ...s, searchResults: results };
+        persist(STORAGE_KEY, next);
+        return next;
+      });
+    } catch (e) {
+      // При ошибке просто очищаем результаты, чтобы не ронять UI
+      set((s) => {
+        const next = { ...s, searchResults: [] };
+        persist(STORAGE_KEY, next);
+        return next;
+      });
+    }
+  },
+  async addContact(userId: number) {
+    const res = await api.post("/contacts", { user_id: userId });
+    const contacts = res.data.contacts as Contact[];
     set((s) => {
-      const next = { ...s, searchResults: [mock] };
+      const next = { ...s, contacts, searchResults: [] };
       persist(STORAGE_KEY, next);
       return next;
     });
   },
-  sendRequest(name, phone) {
-    set((s) => {
-      const id = s.lastId + 1;
-      const contact: Friend = {
-        id,
-        name: name || "Контакт",
-        phone: phone.replace(/\s|-/g, ""),
-        status: "pending",
-        added_at: new Date().toISOString()
-      };
-      const next = {
-        ...s,
-        lastId: id,
-        friends: [contact, ...s.friends],
-        searchResults: []
-      };
-      persist(STORAGE_KEY, next);
-      return next;
-    });
-  },
-  acceptRequest(id) {
-    set((s) => {
-      const friends = s.friends.map((f) =>
-        f.id === id ? { ...f, status: "friend", added_at: new Date().toISOString() } : f
-      );
-      const next = { ...s, friends };
-      persist(STORAGE_KEY, next);
-      return next;
-    });
-  },
-  block(id) {
-    set((s) => {
-      const friends = s.friends.map((f) => (f.id === id ? { ...f, status: "blocked" } : f));
-      const next = { ...s, friends };
-      persist(STORAGE_KEY, next);
-      return next;
-    });
-  },
-  remove(id) {
-    set((s) => {
-      const friends = s.friends.filter((f) => f.id !== id);
-      const next = { ...s, friends };
-      persist(STORAGE_KEY, next);
-      return next;
-    });
+  clearSearch() {
+    set((s) => ({ ...s, searchResults: [] }));
   }
 }));
