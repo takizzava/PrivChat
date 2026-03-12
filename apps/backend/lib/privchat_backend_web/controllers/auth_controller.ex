@@ -4,7 +4,7 @@ defmodule PrivchatBackendWeb.AuthController do
   alias PrivchatBackend.Accounts
   alias PrivchatBackend.Auth.Token
 
-  def register(conn, %{"email" => _email, "password" => _pwd} = params) do
+  def register(conn, params) do
     case Accounts.register_user(params) do
       {:ok, user} ->
         case Token.generate(user) do
@@ -24,8 +24,8 @@ defmodule PrivchatBackendWeb.AuthController do
     end
   end
 
-  def login(conn, %{"email" => email, "password" => pwd}) do
-    case Accounts.authenticate_user(email, pwd) do
+  def login(conn, %{"identifier" => identifier, "password" => pwd}) do
+    case Accounts.authenticate_user(identifier, pwd) do
       {:ok, user} ->
         case Token.generate(user) do
           {:ok, jwt} ->
@@ -42,6 +42,10 @@ defmodule PrivchatBackendWeb.AuthController do
         |> put_status(:unauthorized)
         |> json(%{error: "invalid_credentials"})
     end
+  end
+
+  def login(conn, %{"email" => email, "password" => pwd}) do
+    login(conn, %{"identifier" => email, "password" => pwd})
   end
 
   def settings(%{assigns: %{current_user: user}} = conn, _params) do
@@ -75,4 +79,3 @@ defmodule PrivchatBackendWeb.AuthController do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
   end
 end
-

@@ -11,6 +11,10 @@ defmodule PrivchatBackendWeb.Router do
 
     post "/auth/register", AuthController, :register
     post "/auth/login", AuthController, :login
+    get "/users/search", UserController, :search
+    get "/contacts", UserController, :contacts
+    post "/contacts", UserController, :add_contact
+    post "/uploads", UploadController, :create
 
     get "/chats", ChatController, :index
     post "/chats", ChatController, :create
@@ -32,4 +36,3 @@ defmodule PrivchatBackendWeb.Router do
     end
   end
 end
-

@@ -1,40 +1,155 @@
 defmodule PrivchatBackend.Messaging do
   import Ecto.Query, warn: false
+  alias Ecto.Multi
   alias PrivchatBackend.Repo
-  alias PrivchatBackend.Messaging.{Chat, Message}
+  alias PrivchatBackend.Messaging.{Chat, ChatMember, Message}
 
   def list_chats_for_user(user_id) do
     from(c in Chat,
-      where: c.owner_id == ^user_id,
-      order_by: [desc: c.inserted_at]
+      join: m in ChatMember,
+      on: m.chat_id == c.id,
+      where: m.user_id == ^user_id,
+      order_by: [desc: c.updated_at, desc: c.inserted_at],
+      preload: [members: :user]
     )
     |> Repo.all()
+    |> Enum.map(&hydrate_member_ids/1)
   end
 
-  def create_chat(owner_id, attrs) do
-    %Chat{}
-    |> Chat.changeset(Map.put(attrs, "owner_id", owner_id))
-    |> Repo.insert()
+  def list_messages(chat_id, user_id, limit \\ 50) do
+    if member?(chat_id, user_id) do
+      from(m in Message,
+        where: m.chat_id == ^chat_id,
+        order_by: [desc: m.inserted_at],
+        limit: ^limit
+      )
+      |> Repo.all()
+      |> Enum.reverse()
+    else
+      []
+    end
+  end
+
+  def member?(chat_id, user_id) do
+    from(m in ChatMember, where: m.chat_id == ^chat_id and m.user_id == ^user_id)
+    |> Repo.exists?()
   end
 
   def get_chat!(id), do: Repo.get!(Chat, id)
 
-  def list_messages(chat_id, limit \\ 50) do
-    from(m in Message,
-      where: m.chat_id == ^chat_id,
-      order_by: [desc: m.inserted_at],
-      limit: ^limit
-    )
-    |> Repo.all()
-    |> Enum.reverse()
+  def get_chat_for_user!(chat_id, user_id) do
+    if member?(chat_id, user_id) do
+      Repo.get!(Chat, chat_id)
+    else
+      raise Ecto.NoResultsError
+    end
+  end
+
+  def create_direct_chat(owner_id, partner_id, attrs \\ %{})
+
+  def create_direct_chat(owner_id, partner_id, _attrs) when owner_id == partner_id,
+    do: {:error, :self_chat}
+
+  def create_direct_chat(owner_id, partner_id, attrs) do
+    key = direct_key(owner_id, partner_id)
+    name = Map.get(attrs, "name") || "Диалог"
+
+    Multi.new()
+    |> Multi.run(:chat, fn repo, _ ->
+      case repo.one(from c in Chat, where: c.direct_key == ^key and c.kind == "direct") do
+        nil ->
+          %Chat{}
+          |> Chat.changeset(%{
+            "name" => name,
+            "owner_id" => owner_id,
+            "kind" => "direct",
+            "direct_key" => key
+          })
+          |> repo.insert()
+
+        chat ->
+          {:ok, chat}
+      end
+    end)
+    |> Multi.run(:members, fn repo, %{chat: chat} ->
+      members = [
+        %{chat_id: chat.id, user_id: owner_id},
+        %{chat_id: chat.id, user_id: partner_id}
+      ]
+
+      Enum.reduce_while(members, {:ok, []}, fn member_attrs, {:ok, acc} ->
+        case repo.insert(ChatMember.changeset(%ChatMember{}, member_attrs),
+               on_conflict: :nothing,
+               conflict_target: [:chat_id, :user_id]
+             ) do
+          {:ok, member} -> {:cont, {:ok, [member | acc]}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{chat: chat}} ->
+        chat = chat |> Repo.preload(members: :user) |> hydrate_member_ids()
+        {:ok, chat}
+
+      {:error, _step, reason, _} -> {:error, reason}
+    end
+  end
+
+  def create_group_chat(owner_id, name, member_ids) when is_list(member_ids) do
+    Multi.new()
+    |> Multi.insert(:chat, Chat.changeset(%Chat{}, %{"name" => name, "owner_id" => owner_id, "kind" => "group"}))
+    |> Multi.run(:members, fn repo, %{chat: chat} ->
+      members = Enum.uniq([owner_id | member_ids])
+
+      Enum.reduce_while(members, {:ok, []}, fn uid, {:ok, acc} ->
+        case repo.insert(ChatMember.changeset(%ChatMember{}, %{chat_id: chat.id, user_id: uid})) do
+          {:ok, member} -> {:cont, {:ok, [member | acc]}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{chat: chat}} ->
+        chat = chat |> Repo.preload(members: :user) |> hydrate_member_ids()
+        {:ok, chat}
+
+      {:error, _step, reason, _} -> {:error, reason}
+    end
   end
 
   def create_message(user_id, chat_id, attrs) do
-    %Message{}
-    |> Message.changeset(
-      Map.merge(attrs, %{"sender_id" => user_id, "chat_id" => chat_id})
-    )
-    |> Repo.insert()
+    if member?(chat_id, user_id) do
+      %Message{}
+      |> Message.changeset(Map.merge(attrs, %{"sender_id" => user_id, "chat_id" => chat_id}))
+      |> Repo.insert()
+      |> case do
+        {:ok, msg} ->
+          Repo.get!(Chat, chat_id)
+          |> Ecto.Changeset.change(%{updated_at: NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)})
+          |> Repo.update()
+
+          {:ok, msg}
+
+        other ->
+          other
+      end
+    else
+      {:error, :forbidden}
+    end
+  end
+
+  def hydrate_member_ids(%Chat{members: members} = chat) when is_list(members) do
+    member_ids = Enum.map(members, & &1.user_id)
+    %{chat | member_ids: member_ids}
+  end
+
+  def hydrate_member_ids(chat), do: chat
+
+  defp direct_key(a, b) do
+    [min, max] = Enum.sort([a, b])
+    "#{min}:#{max}"
   end
 end
-
