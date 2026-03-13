@@ -33,9 +33,9 @@ export function setStoredUser(user: User | null) {
   }
 }
 
-export async function apiLogin(email: string, password: string) {
-  const res = await api.post("/auth/login", { identifier: email, password });
-  return res.data as { token: string; user: User };
+export async function apiLogin(email: string, password: string, otp?: string) {
+  const res = await api.post("/auth/login", { identifier: email, password, otp });
+  return res.data as { token: string; user: User; session_id?: number };
 }
 
 export async function apiRegister(payload: {
@@ -46,5 +46,54 @@ export async function apiRegister(payload: {
   email?: string;
 }) {
   const res = await api.post("/auth/register", payload);
-  return res.data as { token: string; user: User };
+  return res.data as { token: string; user: User; session_id?: number };
+}
+
+export async function apiSetup2fa() {
+  const res = await api.post("/auth/2fa/setup");
+  return res.data as { secret: string; recovery_codes: string[] };
+}
+
+export async function apiConfirm2fa(code: string) {
+  const res = await api.post("/auth/2fa/confirm", { code });
+  return res.data as { ok: boolean };
+}
+
+export async function apiDisable2fa(code?: string) {
+  const res = await api.post("/auth/2fa/disable", { code });
+  return res.data as { ok: boolean };
+}
+
+export async function apiSessions() {
+  const res = await api.get("/auth/sessions");
+  return res.data.sessions as Array<{
+    id: number;
+    device_label?: string;
+    user_agent?: string;
+    ip?: string;
+    expires_at?: string;
+    revoked_at?: string;
+    inserted_at?: string;
+  }>;
+}
+
+export async function apiRevokeSession(id: number) {
+  const res = await api.post(`/auth/sessions/${id}/revoke`);
+  return res.data as { ok: boolean };
+}
+
+export async function apiSaveKeyBackup(payload: {
+  blob: string;
+  version?: string;
+  fingerprint?: string;
+  salt: string;
+  iv: string;
+}) {
+  const res = await api.put("/auth/key-backup", payload);
+  return res.data;
+}
+
+export async function apiGetKeyBackup() {
+  const res = await api.get("/auth/key-backup");
+  return res.data.backup as { encrypted_blob?: string; blob?: string; version?: string; key_fingerprint?: string; salt?: string; iv?: string } | null;
 }

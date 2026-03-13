@@ -1,7 +1,9 @@
 defmodule PrivchatBackend.Accounts do
   import Ecto.Query, warn: false
+  alias Ecto.Changeset
   alias PrivchatBackend.Repo
   alias PrivchatBackend.Accounts.{User, UserSettings, Contact}
+  alias PrivchatBackend.Auth.TOTP
 
   def get_user(id), do: Repo.get(User, id)
   def get_user!(id), do: Repo.get!(User, id)
@@ -115,6 +117,78 @@ defmodule PrivchatBackend.Accounts do
     Postgrex.Error -> "none"
   end
 
+  def init_two_factor(user_id) do
+    with %User{} = user <- get_user(user_id) do
+      secret = TOTP.generate_secret()
+      codes = Enum.map(1..8, fn _ -> generate_recovery_code() end)
+
+      user
+      |> Changeset.change(%{
+        two_factor_secret: secret,
+        two_factor_enabled: false,
+        recovery_codes: codes
+      })
+      |> Repo.update()
+      |> case do
+        {:ok, _} -> {:ok, %{secret: secret, recovery_codes: codes}}
+        error -> error
+      end
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def confirm_two_factor(user_id, code) when is_binary(code) do
+    with %User{} = user <- get_user(user_id),
+         true <- TOTP.verify(user.two_factor_secret, code) do
+      user
+      |> Changeset.change(two_factor_enabled: true)
+      |> Repo.update()
+    else
+      _ -> {:error, :invalid_code}
+    end
+  end
+
+  def disable_two_factor(user_id, code \\ nil) do
+    with %User{} = user <- get_user(user_id),
+         true <- code_valid_for_user?(user, code) do
+      user
+      |> Changeset.change(%{
+        two_factor_enabled: false,
+        two_factor_secret: nil,
+        recovery_codes: []
+      })
+      |> Repo.update()
+    else
+      _ -> {:error, :unauthorized}
+    end
+  end
+
+  def verify_second_factor(%User{two_factor_enabled: false}), do: {:ok, :disabled}
+
+  def verify_second_factor(%User{} = user, code) when is_binary(code) do
+    cond do
+      TOTP.verify(user.two_factor_secret, code) ->
+        {:ok, :totp}
+
+      Enum.member?(user.recovery_codes || [], code) ->
+        remaining = (user.recovery_codes || []) |> Enum.reject(&(&1 == code))
+
+        user
+        |> Changeset.change(recovery_codes: remaining)
+        |> Repo.update()
+        |> case do
+          {:ok, _} -> {:ok, :recovery}
+          _ -> {:error, :invalid_code}
+        end
+
+      true ->
+        {:error, :invalid_code}
+    end
+  end
+
+  def verify_second_factor(_, _), do: {:error, :invalid_code}
+
   defp ensure_default_settings(%User{id: user_id}) do
     %UserSettings{user_id: user_id}
     |> UserSettings.changeset(%{})
@@ -142,4 +216,20 @@ defmodule PrivchatBackend.Accounts do
       true -> "+" <> digits
     end
   end
+
+  defp generate_recovery_code do
+    :crypto.strong_rand_bytes(6) |> Base.encode32(case: :lower, padding: false)
+  end
+
+  defp code_valid_for_user?(%User{two_factor_enabled: false}, _), do: true
+
+  defp code_valid_for_user?(%User{} = user, code) when is_binary(code) do
+    verify_second_factor(user, code)
+    |> case do
+      {:ok, _} -> true
+      _ -> false
+    end
+  end
+
+  defp code_valid_for_user?(_, _), do: false
 end

@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("+7");
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -59,7 +60,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (mode === "login") {
-        await login(identifier, password);
+        await login(identifier, password, otp || undefined);
       } else {
         await register({
           phone,
@@ -212,6 +213,17 @@ export default function LoginPage() {
                 </IconButton>
               </div>
             </div>
+
+
+            {mode === "login" && (
+              <Input
+                label="2FA код (если включена защита)"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                prefix={<Lock className="h-4 w-4" />}
+                placeholder="123456"
+              />
+            )}
 
             {error && (
               <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-100 border border-red-200 dark:border-red-800 rounded-md px-3 py-2">

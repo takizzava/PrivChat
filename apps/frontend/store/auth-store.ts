@@ -6,17 +6,19 @@ import {
   apiRegister,
   setStoredUser,
   setToken,
-  getStoredUser
+  getStoredUser,
+  getToken
 } from "@lib/auth";
 import type { User } from "@t/user";
 
 type State = {
   user: User | null;
   token: string | null;
+  hydrated: boolean;
 };
 
 type Actions = {
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string, otp?: string) => Promise<void>;
   register: (payload: {
     phone: string;
     username: string;
@@ -25,33 +27,39 @@ type Actions = {
     display_name?: string;
   }) => Promise<void>;
   logout: () => void;
+  hydrateAuth: () => void;
 };
 
-const initialUser =
-  typeof window !== "undefined" ? getStoredUser() : null;
-const initialToken =
-  typeof window !== "undefined"
-    ? window.localStorage.getItem("privchat_token")
-    : null;
-
 export const useAuthStore = create<State & Actions>((set) => ({
-  user: initialUser,
-  token: initialToken,
-  async login(identifier, password) {
-    const { token, user } = await apiLogin(identifier, password);
+  user: null,
+  token: null,
+  hydrated: false,
+  async login(identifier, password, otp) {
+    const { token, user } = await apiLogin(identifier, password, otp);
     setToken(token);
     setStoredUser(user);
-    set({ token, user });
+    set({ token, user, hydrated: true });
   },
   async register(payload) {
     const { token, user } = await apiRegister(payload);
     setToken(token);
     setStoredUser(user);
-    set({ token, user });
+    set({ token, user, hydrated: true });
   },
   logout() {
     setToken(null);
     setStoredUser(null);
-    set({ token: null, user: null });
+    set({ token: null, user: null, hydrated: true });
+  },
+  hydrateAuth() {
+    set((state) => {
+      if (state.hydrated) {
+        return state;
+      }
+      const storedUser = getStoredUser();
+      const storedToken = getToken();
+      setToken(storedToken);
+      return { user: storedUser, token: storedToken, hydrated: true };
+    });
   }
 }));

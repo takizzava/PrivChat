@@ -2,11 +2,26 @@ defmodule PrivchatBackend.Messaging.Message do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @derive {Jason.Encoder, only: [:id, :body, :sender_id, :chat_id, :inserted_at, :encrypted, :envelope_metadata]}
+  @derive {Jason.Encoder,
+           only: [
+             :id,
+             :body,
+             :sender_id,
+             :chat_id,
+             :inserted_at,
+             :encrypted,
+             :envelope_metadata,
+             :edited_at,
+             :reactions,
+             :forwarded_from_id
+           ]}
   schema "messages" do
     field :body, :string
     field :encrypted, :boolean, default: false
     field :envelope_metadata, :map, default: %{}
+    field :edited_at, :naive_datetime
+    field :reactions, :map, default: %{}
+    field :forwarded_from_id, :id
 
     belongs_to :chat, PrivchatBackend.Messaging.Chat
     belongs_to :sender, PrivchatBackend.Accounts.User
@@ -16,10 +31,18 @@ defmodule PrivchatBackend.Messaging.Message do
 
   def changeset(message, attrs) do
     message
-    |> cast(attrs, [:body, :chat_id, :sender_id, :encrypted, :envelope_metadata])
+    |> cast(attrs, [
+      :body,
+      :chat_id,
+      :sender_id,
+      :encrypted,
+      :envelope_metadata,
+      :forwarded_from_id
+    ])
     |> validate_required([:chat_id, :sender_id])
     |> validate_message_has_content()
     |> validate_body_length_if_present()
+    |> put_default_reactions()
   end
 
   defp validate_body_length_if_present(changeset) do
@@ -56,6 +79,13 @@ defmodule PrivchatBackend.Messaging.Message do
       changeset
     else
       add_error(changeset, :body, "can't be blank")
+    end
+  end
+
+  defp put_default_reactions(changeset) do
+    case get_field(changeset, :reactions) do
+      %{} -> changeset
+      _ -> put_change(changeset, :reactions, %{})
     end
   end
 end

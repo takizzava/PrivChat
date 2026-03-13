@@ -1,5 +1,6 @@
 "use client";
 
+import type { AxiosError } from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@store/auth-store";
@@ -16,6 +17,7 @@ import { Skeleton } from "@components/ui/skeleton";
 export default function ChatsPage() {
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
+  const authHydrated = useAuthStore((s) => s.hydrated);
   const {
     loadChats,
     startDirectChat,
@@ -32,22 +34,34 @@ export default function ChatsPage() {
   const [filter, setFilter] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "unread" | "pinned">("all");
   const [viewMode, setViewMode] = useState<"chats" | "friends">("chats");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     setHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !authHydrated) return;
     if (!token) {
       router.replace("/login");
       return;
     }
     (async () => {
-      await Promise.all([loadChats(), loadContacts()]);
-      setLoading(false);
+      try {
+        setLoadError(null);
+        await Promise.all([loadChats(), loadContacts()]);
+      } catch (error) {
+        const status = (error as AxiosError)?.response?.status;
+        if (status === 401) {
+          router.replace("/login");
+          return;
+        }
+        setLoadError("Не удалось загрузить чаты, попробуйте позже.");
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, [hydrated, token, router, loadChats, loadContacts]);
+  }, [hydrated, authHydrated, token, router, loadChats, loadContacts]);
 
   const stats = useMemo(() => {
     const unreadCount = Object.values(unread).reduce((acc, v) => acc + (v ?? 0), 0);
@@ -58,7 +72,7 @@ export default function ChatsPage() {
     };
   }, [chats.length, pinned.length, unread]);
 
-  if (!hydrated || !token) return null;
+  if (!hydrated || !authHydrated || !token) return null;
 
   const handleStartChat = async (userId: number) => {
     const chat = await startDirectChat(userId);
@@ -126,9 +140,9 @@ export default function ChatsPage() {
               ))}
             </div>
 
-            <div className="rounded-2xl border border-[var(--pc-border)] bg-[var(--pc-surface-strong)]/70 shadow-lg overflow-hidden">
-              <div className="bg-[var(--pc-surface-subtle)]/60 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
+              <div className="rounded-2xl border border-[var(--pc-border)] bg-[var(--pc-surface-strong)]/70 shadow-lg overflow-hidden">
+                <div className="bg-[var(--pc-surface-subtle)]/60 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
                   <h2 className="text-xl font-semibold">Начните диалог</h2>
                   <p className="text-sm text-[var(--pc-text-muted)]">
                     Добавьте контакт по номеру или нику, откройте чат и пишите без перезагрузки.
@@ -149,6 +163,9 @@ export default function ChatsPage() {
                     <Skeleton key={idx} className="h-16 sm:h-20 rounded-2xl" />
                   ))}
                 </div>
+              )}
+              {loadError && (
+                <div className="p-4 sm:p-6 text-sm text-rose-400">{loadError}</div>
               )}
               {!loading && (
                 <div className="p-4 sm:p-6 text-sm text-[var(--pc-text-muted)]">

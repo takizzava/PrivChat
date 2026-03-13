@@ -6,8 +6,10 @@ defmodule PrivchatBackend.Application do
   def start(_type, _args) do
     children = [
       PrivchatBackend.Repo,
-      {Phoenix.PubSub, name: PrivchatBackend.PubSub},
+      {Phoenix.PubSub, name: PrivchatBackend.PubSub, adapter: Phoenix.PubSub.PG2},
       PrivchatBackendWeb.Presence,
+      {Task.Supervisor, name: PrivchatBackend.Tasks.Supervisor},
+      PrivchatBackend.Tasks.WorkQueue,
       PrivchatBackendWeb.Endpoint
     ]
 
@@ -20,4 +22,3 @@ defmodule PrivchatBackend.Application do
     :ok
   end
 end
-

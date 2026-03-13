@@ -2,32 +2,57 @@
 
 import { useEffect, useState } from "react";
 import { Socket, Channel } from "phoenix";
-import { getToken } from "./auth";
 
 let socket: Socket | null = null;
+let socketToken: string | null = null;
 
-function getSocket(): Socket | null {
+function createSocket(token: string) {
+  const url = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/socket";
+  const s = new Socket(url, {
+    params: { token }
+  });
+  s.connect();
+  return s;
+}
+
+function getSocket(token: string | null) {
   if (typeof window === "undefined") return null;
-  if (socket) return socket;
-
-  const token = getToken();
-
-  socket = new Socket(
-    process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/socket",
-    {
-      params: { token }
+  if (!token) {
+    socketToken = null;
+    if (socket) {
+      socket.disconnect();
+      socket = null;
     }
-  );
-  socket.connect();
+    return null;
+  }
+
+  if (socket && socketToken === token) {
+    return socket;
+  }
+
+  if (socket) {
+    socket.disconnect();
+  }
+
+  socketToken = token;
+  socket = createSocket(token);
   return socket;
 }
 
-export function useSocketForChat(chatId: number): Channel | null {
+export function useSocketForChat(chatId: number, token: string | null): Channel | null {
   const [channel, setChannel] = useState<Channel | null>(null);
 
   useEffect(() => {
-    const s = getSocket();
-    if (!s) return;
+    if (!token) {
+      setChannel(null);
+      return;
+    }
+
+    const s = getSocket(token);
+    if (!s) {
+      setChannel(null);
+      return;
+    }
 
     const ch = s.channel(`chat:${chatId}`, {});
     ch.join().receive("error", () => {
@@ -38,8 +63,7 @@ export function useSocketForChat(chatId: number): Channel | null {
     return () => {
       ch.leave();
     };
-  }, [chatId]);
+  }, [chatId, token]);
 
   return channel;
 }
-

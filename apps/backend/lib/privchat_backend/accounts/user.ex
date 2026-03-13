@@ -2,7 +2,16 @@ defmodule PrivchatBackend.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @derive {Jason.Encoder, only: [:id, :email, :phone, :username, :display_name, :inserted_at]}
+  @derive {Jason.Encoder,
+           only: [
+             :id,
+             :email,
+             :phone,
+             :username,
+             :display_name,
+             :inserted_at,
+             :two_factor_enabled
+           ]}
   schema "users" do
     field :email, :string
     field :password_hash, :string
@@ -10,6 +19,11 @@ defmodule PrivchatBackend.Accounts.User do
     field :display_name, :string
     field :phone, :string
     field :username, :string
+    field :two_factor_enabled, :boolean, default: false
+    field :two_factor_secret, :string
+    field :recovery_codes, {:array, :string}, default: []
+    field :device_limit, :integer, default: 5
+    field :last_key_rotation_at, :naive_datetime
 
     has_many :chats, PrivchatBackend.Messaging.Chat, foreign_key: :owner_id
     has_one :user_settings, PrivchatBackend.Accounts.UserSettings

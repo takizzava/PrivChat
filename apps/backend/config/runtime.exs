@@ -25,3 +25,8 @@ jwt_secret =
 config :privchat_backend, PrivchatBackend.Auth.Token,
   secret_key: jwt_secret
 
+cdn_host = System.get_env("CDN_HOST")
+
+if cdn_host do
+  config :privchat_backend, :cdn_host, cdn_host
+end

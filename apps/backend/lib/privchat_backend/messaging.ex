@@ -1,6 +1,6 @@
 defmodule PrivchatBackend.Messaging do
   import Ecto.Query, warn: false
-  alias Ecto.Multi
+  alias Ecto.{Changeset, Multi}
   alias PrivchatBackend.Repo
   alias PrivchatBackend.Messaging.{Chat, ChatMember, Message}
 
@@ -36,6 +36,9 @@ defmodule PrivchatBackend.Messaging do
   end
 
   def get_chat!(id), do: Repo.get!(Chat, id)
+
+  def get_message(id), do: Repo.get(Message, id)
+  def get_message!(id), do: Repo.get!(Message, id)
 
   def get_chat_for_user!(chat_id, user_id) do
     if member?(chat_id, user_id) do
@@ -141,6 +144,50 @@ defmodule PrivchatBackend.Messaging do
     end
   end
 
+  def edit_message(user_id, message_id, attrs) when is_map(attrs) do
+    with %Message{} = msg <- Repo.get(Message, message_id),
+         true <- msg.sender_id == user_id,
+         true <- member?(msg.chat_id, user_id) do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      msg
+      |> Message.changeset(attrs)
+      |> Changeset.change(edited_at: now)
+      |> Repo.update()
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
+  def forward_message(user_id, message_id, target_chat_id) do
+    with %Message{} = msg <- Repo.get(Message, message_id),
+         true <- member?(msg.chat_id, user_id),
+         true <- member?(target_chat_id, user_id) do
+      create_message(user_id, target_chat_id, %{
+        "body" => msg.body,
+        "encrypted" => msg.encrypted,
+        "envelope_metadata" => msg.envelope_metadata,
+        "forwarded_from_id" => msg.id
+      })
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
+  def react_to_message(user_id, message_id, emoji, action \\ :add)
+      when is_binary(emoji) and action in [:add, :remove] do
+    with %Message{} = msg <- Repo.get(Message, message_id),
+         true <- member?(msg.chat_id, user_id) do
+      updated = update_reactions(msg.reactions || %{}, emoji, user_id, action)
+
+      msg
+      |> Changeset.change(reactions: updated)
+      |> Repo.update()
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
   def hydrate_member_ids(%Chat{members: members} = chat) when is_list(members) do
     member_ids = Enum.map(members, & &1.user_id)
     %{chat | member_ids: member_ids}
@@ -151,5 +198,19 @@ defmodule PrivchatBackend.Messaging do
   defp direct_key(a, b) do
     [min, max] = Enum.sort([a, b])
     "#{min}:#{max}"
+  end
+
+  defp update_reactions(reactions, emoji, user_id, :add) do
+    current = Map.get(reactions, emoji, [])
+    Map.put(reactions, emoji, Enum.uniq([user_id | current]))
+  end
+
+  defp update_reactions(reactions, emoji, user_id, :remove) do
+    current = Map.get(reactions, emoji, [])
+
+    case Enum.reject(current, &(&1 == user_id)) do
+      [] -> Map.delete(reactions, emoji)
+      remaining -> Map.put(reactions, emoji, remaining)
+    end
   end
 end
